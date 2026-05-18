@@ -1,0 +1,165 @@
+:root {
+  color-scheme: light;
+  font: 14px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 390px;
+  min-height: 560px;
+  margin: 0;
+  background: #f7f8fa;
+  color: #20242c;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  height: 34px;
+  border: 1px solid #c8ced8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #20242c;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button.primary {
+  min-width: 104px;
+  border-color: #0b57d0;
+  background: #0b57d0;
+  color: #ffffff;
+  font-weight: 650;
+}
+
+.dialer {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 12px;
+}
+
+.settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+label {
+  display: grid;
+  gap: 5px;
+  color: #48515f;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid #c8ced8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #20242c;
+}
+
+input {
+  height: 34px;
+  padding: 6px 8px;
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+  padding: 8px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.queue {
+  display: grid;
+  gap: 6px;
+  max-height: 190px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.queueItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px;
+  border: 1px solid #dde2eb;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.queueItem.isDone {
+  color: #7a8494;
+  background: #eef1f5;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.phone {
+  color: #667085;
+  font-size: 12px;
+}
+
+.queueItem button {
+  min-width: 54px;
+}

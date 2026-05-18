@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voice Dialer</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="dialer">
+      <header class="header">
+        <div>
+          <h1>Voice Dialer</h1>
+          <p id="queueStatus">No numbers loaded</p>
+        </div>
+        <button id="callNext" class="primary" type="button" disabled>Call next</button>
+      </header>
+
+      <section class="settings">
+        <label>
+          Google account
+          <input id="accountIndex" type="number" min="0" step="1" inputmode="numeric">
+        </label>
+        <label>
+          Country code
+          <input id="defaultCountryCode" type="text" inputmode="numeric" maxlength="4">
+        </label>
+      </section>
+
+      <label class="toggle">
+        <input id="clickToDial" type="checkbox">
+        Click phone numbers in Sheets
+      </label>
+      <label class="toggle">
+        <input id="confirmBeforeDial" type="checkbox">
+        Confirm before opening Voice
+      </label>
+
+      <label class="pasteBox">
+        Paste spreadsheet rows
+        <textarea id="sourceRows" spellcheck="false" placeholder="Name	Phone&#10;Alex	(555) 123-4567"></textarea>
+      </label>
+
+      <div class="actions">
+        <button id="loadRows" type="button">Load queue</button>
+        <button id="clearDone" type="button">Clear called</button>
+        <button id="resetQueue" type="button">Reset</button>
+      </div>
+
+      <ol id="queue" class="queue" aria-live="polite"></ol>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
