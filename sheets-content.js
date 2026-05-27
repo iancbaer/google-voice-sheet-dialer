@@ -3,6 +3,7 @@
 const PHONE_PATTERN = /(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/;
 let lastDialed = { phone: "", at: 0 };
 let toastTimer = null;
+let lastPointerEvent = null;
 
 function normalizePhone(raw, defaultCountryCode = "1") {
   const trimmed = String(raw || "").trim();
@@ -78,6 +79,12 @@ function textCandidatesFromClick(event) {
     document.querySelector("[aria-label*='formula bar' i]")?.textContent || "",
     document.querySelector("[aria-label*='formula bar' i]")?.value || ""
   ];
+}
+
+function googleVoiceUrl(phone, accountIndex = "0") {
+  const cleanAccountIndex = String(accountIndex || "0").replace(/\D/g, "") || "0";
+  const encodedPhone = encodeURIComponent(`+${phone}`);
+  return `https://voice.google.com/u/${cleanAccountIndex}/calls?gv_dial=${encodedPhone}&gv_auto=1`;
 }
 
 function findPhone(values, defaultCountryCode) {
@@ -156,12 +163,27 @@ async function maybeDialFromClick(event) {
   }
 
   lastDialed = { phone, at: now };
-  const result = await chrome.runtime.sendMessage({ type: "DIAL_PHONE", phone });
-  showToast(result?.ok ? `Opening Google Voice for ${result.displayPhone}` : `Dialer: ${result?.error || "failed"}`);
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "DIAL_PHONE", phone });
+    if (result?.ok) {
+      showToast(`Opening Google Voice for ${result.displayPhone}`);
+      return;
+    }
+  } catch {
+    // If the service worker is asleep or Chrome drops the message, the URL path still works.
+  }
+
+  window.open(googleVoiceUrl(phone, settings.accountIndex), "_blank", "noopener");
+  showToast(`Opening Google Voice for ${displayPhone(phone)}`);
 }
 
-document.addEventListener("click", (event) => {
+function handleDialEvent(event) {
+  lastPointerEvent = event;
   maybeDialFromClick(event).catch(() => {});
-}, true);
+}
+
+document.addEventListener("pointerup", handleDialEvent, true);
+document.addEventListener("mouseup", handleDialEvent, true);
+document.addEventListener("click", handleDialEvent, true);
 
 showToast("Google Voice dialer ready");

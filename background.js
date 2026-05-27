@@ -121,6 +121,35 @@ async function dispatchTrustedText(tabId, text) {
   }
 }
 
+function voicePageHelpersExpression() {
+  return `
+    (() => {
+      const visible = (element) => {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+      };
+      const label = (element) => [
+        element.innerText,
+        element.textContent,
+        element.getAttribute("aria-label"),
+        element.getAttribute("title")
+      ].filter(Boolean).join(" ").trim().toLowerCase();
+      const input = [...document.querySelectorAll("input")]
+        .find((item) => item.placeholder === "Enter a name or number" || /name or number/i.test(item.getAttribute("aria-label") || ""));
+      const callButton = [...document.querySelectorAll("button")]
+        .find((item) => visible(item) && /^call$/.test(label(item)));
+      return {
+        hasInput: !!input,
+        hasCallButton: !!callButton,
+        callButtonDisabled: !!callButton?.disabled,
+        callButtonLabel: callButton ? label(callButton) : ""
+      };
+    })()
+  `;
+}
+
 async function withDebugger(tabId, task) {
   await chrome.debugger.attach({ tabId }, "1.3");
   try {
@@ -137,9 +166,9 @@ async function placeTrustedGoogleVoiceCall(tabId, phone) {
   }
 
   return await withDebugger(tabId, async () => {
-    for (let attempts = 0; attempts < 60; attempts += 1) {
-      const found = await evalInTab(tabId, `!![...document.querySelectorAll("input")].find((input) => input.placeholder === "Enter a name or number")`);
-      if (found) {
+    for (let attempts = 0; attempts < 80; attempts += 1) {
+      const state = await evalInTab(tabId, voicePageHelpersExpression());
+      if (state?.hasInput) {
         break;
       }
       await sleep(250);
@@ -155,28 +184,37 @@ async function placeTrustedGoogleVoiceCall(tabId, phone) {
         return true;
       })()
     `);
-    await dispatchTrustedText(tabId, phone);
+    await dispatchTrustedText(tabId, String(phone || "").replace(/\D/g, ""));
     await sleep(400);
     await dispatchTrustedEnter(tabId);
-    await sleep(600);
 
-    const armed = await evalInTab(tabId, `
-      (() => {
-        const button = [...document.querySelectorAll("button")].find((item) => item.innerText.trim() === "call");
-        return !!button && !button.disabled;
-      })()
-    `);
-
-    if (!armed) {
-      return false;
+    for (let attempts = 0; attempts < 30; attempts += 1) {
+      const state = await evalInTab(tabId, voicePageHelpersExpression());
+      if (state?.hasCallButton && !state.callButtonDisabled) {
+        await evalInTab(tabId, `
+          (() => {
+            const visible = (element) => {
+              const rect = element.getBoundingClientRect();
+              const style = getComputedStyle(element);
+              return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+            };
+            const label = (element) => [
+              element.innerText,
+              element.textContent,
+              element.getAttribute("aria-label"),
+              element.getAttribute("title")
+            ].filter(Boolean).join(" ").trim().toLowerCase();
+            [...document.querySelectorAll("button")]
+              .find((item) => visible(item) && /^call$/.test(label(item)) && !item.disabled)
+              ?.click();
+          })()
+        `);
+        return true;
+      }
+      await sleep(250);
     }
 
-    await evalInTab(tabId, `
-      [...document.querySelectorAll("button")]
-        .find((item) => item.innerText.trim() === "call")
-        ?.click()
-    `);
-    return true;
+    return false;
   });
 }
 

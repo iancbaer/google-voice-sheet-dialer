@@ -151,8 +151,17 @@ async function autoDialFromUrl() {
 
   input.focus();
   setNativeInputValue(input, phone);
-  const result = await chrome.runtime.sendMessage({ type: "PLACE_TRUSTED_CALL", phone });
-  showStatus(result?.ok ? "Placing call in Google Voice." : "Could not place call in Google Voice.");
+
+  for (let attempts = 0; attempts < 4; attempts += 1) {
+    const result = await chrome.runtime.sendMessage({ type: "PLACE_TRUSTED_CALL", phone });
+    if (result?.ok) {
+      showStatus("Placing call in Google Voice.");
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 900));
+  }
+
+  showStatus("Could not place call in Google Voice.");
 }
 
 installManualDialAssist();
