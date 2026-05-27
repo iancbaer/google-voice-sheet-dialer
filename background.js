@@ -218,6 +218,44 @@ async function placeTrustedGoogleVoiceCall(tabId, phone) {
   });
 }
 
+
+async function dispatchTrustedCopy(tabId) {
+  return await withDebugger(tabId, async () => {
+    await debugCommand(tabId, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Control",
+      code: "ControlLeft",
+      windowsVirtualKeyCode: 17,
+      nativeVirtualKeyCode: 17,
+      modifiers: 2
+    });
+    await debugCommand(tabId, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "c",
+      code: "KeyC",
+      windowsVirtualKeyCode: 67,
+      nativeVirtualKeyCode: 67,
+      modifiers: 2
+    });
+    await debugCommand(tabId, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "c",
+      code: "KeyC",
+      windowsVirtualKeyCode: 67,
+      nativeVirtualKeyCode: 67,
+      modifiers: 2
+    });
+    await debugCommand(tabId, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "Control",
+      code: "ControlLeft",
+      windowsVirtualKeyCode: 17,
+      nativeVirtualKeyCode: 17
+    });
+    return true;
+  });
+}
+
 async function commitTrustedDialInput(tabId) {
   return await withDebugger(tabId, async () => {
     await evalInTab(tabId, `
@@ -256,6 +294,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "GET_DIALER_SETTINGS") {
     getSettings()
       .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "COPY_ACTIVE_SELECTION" && sender.tab?.id != null) {
+    dispatchTrustedCopy(sender.tab.id)
+      .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }

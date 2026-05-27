@@ -1,0 +1,10 @@
+[Unit]
+Description=Reassert Google Voice audio routing for Chrome on Linux
+After=pipewire-pulse.service wireplumber.service
+Wants=pipewire-pulse.service wireplumber.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/google-voice-audio-fix.sh
+Restart=always
+RestartSec=2

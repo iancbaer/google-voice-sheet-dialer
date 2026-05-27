@@ -1,27 +1,60 @@
 # Google Voice Sheet Dialer for Linux Chrome
 
-This unpacked Chrome extension is built for Chrome on Linux and dials phone
-numbers through Google Voice.
+Unpacked Chrome extension for Linux Chrome that turns phone numbers in Google
+Sheets or web pages into Google Voice calls.
 
-Behavior:
+What it does:
 
-- Toolbar popup: paste Google Sheet rows, load a queue, click `Call next`.
-- Google Sheets: click a cell or selected text containing a phone number. The
-  extension opens Google Voice and prepares the call.
-- Context menu: highlight a phone number on a page, right-click, and choose `Call selected number with Google Voice`.
-- Compliance step: Google Voice's final `Call` button is left for the user to click manually.
+- Google Sheets: click a cell containing a phone number; if Sheets hides the
+  value in its canvas UI, the extension falls back to copying the selected cell
+  through Chrome's trusted keyboard path and reads the copied phone number.
+- Google Voice: opens the call screen, fills the number, and uses Chrome's
+  debugger input path to press the trusted call controls.
+- Web pages: click phone-number text or links to dial through Google Voice.
+- Linux audio watchdog: keeps Chrome output routed to AirPods when connected,
+  keeps the browser microphone on the forced ALSA mic source, and moves active
+  call streams back onto those devices if PipeWire/Chrome drifts.
 
-The browser-side calling fix in this repo is Linux-specific because it depends
-on Chrome using the local Linux audio stack correctly.
-
-Google Voice URL format:
-
-```text
-https://voice.google.com/u/0/calls?a=nc,%2B18005550111
-```
-
-Chrome must have the unpacked extension loaded from this folder:
+The current local install is expected at:
 
 ```text
 /home/iancbaer/google-voice-dialer-extension
+```
+
+The Chrome profile cache is expected to load version `1.3.4` from:
+
+```text
+~/.config/google-chrome/Default/Extensions/bmejbhdmhfmeegbilffhhpcaidihdkif/1.3.4_0
+```
+
+## Linux audio watchdog
+
+The watchdog files are included in `linux/` for reproducibility:
+
+```text
+linux/google-voice-audio-fix.sh
+linux/google-voice-audio-fix.service
+```
+
+Installed user-service locations:
+
+```text
+~/.local/bin/google-voice-audio-fix.sh
+~/.config/systemd/user/google-voice-audio-fix.service
+```
+
+Useful checks:
+
+```bash
+systemctl --user status google-voice-audio-fix.service
+pactl info | grep -E 'Default (Sink|Source)'
+pactl list short sink-inputs
+pactl list short source-outputs
+```
+
+Expected routing while AirPods are connected:
+
+```text
+Default Sink: bluez_output.9C_A9_C5_1B_DB_EF.1
+Default Source: forced_alsa_mic
 ```
