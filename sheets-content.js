@@ -5,27 +5,19 @@ let lastDialed = { phone: "", at: 0 };
 let toastTimer = null;
 let lastPointerEvent = null;
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function normalizePhone(raw, defaultCountryCode = "1") {
   const trimmed = String(raw || "").trim();
   const hasPlus = trimmed.includes("+");
   const digits = trimmed.replace(/\D/g, "");
 
-  if (!digits) {
-    return "";
-  }
-
-  if (hasPlus) {
-    return digits;
-  }
-
-  if (digits.length === 10 && defaultCountryCode === "1") {
-    return `1${digits}`;
-  }
-
-  if (digits.length === 11 && digits.startsWith("1")) {
-    return digits;
-  }
-
+  if (!digits) return "";
+  if (hasPlus) return digits;
+  if (digits.length === 10 && defaultCountryCode === "1") return `1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return digits;
   return digits;
 }
 
@@ -37,47 +29,55 @@ function displayPhone(phone) {
   return `+${phone}`;
 }
 
+function textOfNode(node) {
+  if (!node || node === window || node === document) return "";
+  return [
+    node.value,
+    node.textContent,
+    node.ariaLabel,
+    node.title,
+    node.getAttribute?.("aria-label"),
+    node.getAttribute?.("data-tooltip"),
+    node.getAttribute?.("data-value"),
+    node.getAttribute?.("data-phone"),
+    node.getAttribute?.("data-number"),
+    node.getAttribute?.("data-formula"),
+    node.getAttribute?.("href")
+  ].filter(Boolean).join(" ");
+}
+
+function selectedSheetText() {
+  return [
+    document.querySelector(".cell-input")?.textContent,
+    document.querySelector(".cell-input")?.value,
+    document.querySelector(".waffle-cell-input")?.textContent,
+    document.querySelector(".waffle-cell-input")?.value,
+    document.querySelector("[role='gridcell'][aria-selected='true']")?.textContent,
+    document.querySelector("[role='gridcell'].cell-input")?.textContent,
+    document.querySelector("[aria-label*='formula bar' i]")?.textContent,
+    document.querySelector("[aria-label*='formula bar' i]")?.value,
+    document.querySelector("input[aria-label*='formula' i]")?.value,
+    document.querySelector("textarea[aria-label*='formula' i]")?.value,
+    document.querySelector("div[contenteditable='true']")?.textContent
+  ].filter(Boolean).join(" ");
+}
+
 function textCandidatesFromClick(event) {
   const selection = String(window.getSelection?.() || "").trim();
   const active = document.activeElement;
-  const activeValue = active && "value" in active ? String(active.value || "") : "";
   const target = event.target;
   const path = event.composedPath?.() || [];
-  const pathText = path
-    .slice(0, 6)
-    .map((node) => {
-      if (!node || node === window || node === document) return "";
-      const el = node;
-      return [
-        el.value,
-        el.textContent,
-        el.ariaLabel,
-        el.title,
-        el.getAttribute?.("aria-label"),
-        el.getAttribute?.("data-tooltip"),
-        el.getAttribute?.("data-value")
-      ].filter(Boolean).join(" ");
-    })
-    .join(" ");
-
-  const gridSelection = [
-    document.querySelector(".cell-input")?.textContent,
-    document.querySelector(".cell-input")?.value,
-    document.querySelector("[role='gridcell'][aria-selected='true']")?.textContent,
-    document.querySelector("[role='gridcell'].cell-input")?.textContent,
-    document.querySelector(".waffle-cell-input")?.textContent
-  ].filter(Boolean).join(" ");
+  const pointElements = typeof document.elementsFromPoint === "function"
+    ? document.elementsFromPoint(event.clientX, event.clientY).slice(0, 12)
+    : [];
 
   return [
     selection,
-    activeValue,
-    target?.textContent || "",
-    target?.ariaLabel || "",
-    target?.title || "",
-    pathText,
-    gridSelection,
-    document.querySelector("[aria-label*='formula bar' i]")?.textContent || "",
-    document.querySelector("[aria-label*='formula bar' i]")?.value || ""
+    active && "value" in active ? String(active.value || "") : "",
+    textOfNode(target),
+    ...path.slice(0, 10).map(textOfNode),
+    ...pointElements.map(textOfNode),
+    selectedSheetText()
   ];
 }
 
@@ -91,11 +91,8 @@ function findPhone(values, defaultCountryCode) {
   for (const value of values) {
     const match = String(value || "").match(PHONE_PATTERN);
     const phone = normalizePhone(match?.[0] || "", defaultCountryCode);
-    if (phone.length >= 10) {
-      return phone;
-    }
+    if (phone.length >= 10) return phone;
   }
-
   return "";
 }
 
@@ -129,40 +126,35 @@ async function getSettings() {
   return await chrome.runtime.sendMessage({ type: "GET_DIALER_SETTINGS" });
 }
 
-async function maybeDialFromClick(event) {
-  if (event.button !== 0) {
-    return;
+async function findPhoneAfterSheetsSettles(event, settings) {
+  // First try the exact click event. Then wait for Google Sheets to update the
+  // selected cell/formula bar. This avoids blocking Sheets' own click handlers.
+  for (const delay of [0, 120, 300, 650]) {
+    if (delay) await sleep(delay);
+    const phone = findPhone(textCandidatesFromClick(event), settings.defaultCountryCode);
+    if (phone) return phone;
   }
+  return "";
+}
+
+async function maybeDialFromClick(event) {
+  if (event.button !== 0) return;
 
   const settings = await getSettings();
-  if (!settings.clickToDial) {
-    return;
-  }
+  if (!settings.clickToDial) return;
 
-  let phone = findPhone(textCandidatesFromClick(event), settings.defaultCountryCode);
-  if (!phone) {
-    await new Promise((resolve) => setTimeout(resolve, 180));
-    phone = findPhone(textCandidatesFromClick(event), settings.defaultCountryCode);
-  }
-  if (!phone) {
-    await new Promise((resolve) => setTimeout(resolve, 450));
-    phone = findPhone(textCandidatesFromClick(event), settings.defaultCountryCode);
-  }
-
-  if (!phone) {
-    return;
-  }
+  const phone = await findPhoneAfterSheetsSettles(event, settings);
+  if (!phone) return;
 
   const now = Date.now();
-  if (lastDialed.phone === phone && now - lastDialed.at < 2500) {
-    return;
-  }
+  if (lastDialed.phone === phone && now - lastDialed.at < 2500) return;
 
-  if (settings.confirmBeforeDial && !window.confirm(`Call ${displayPhone(phone)} with Google Voice?`)) {
-    return;
-  }
+  if (settings.confirmBeforeDial && !window.confirm(`Call ${displayPhone(phone)} with Google Voice?`)) return;
 
   lastDialed = { phone, at: now };
+
+  // Do not preventDefault/stopPropagation here. Google Sheets needs its own
+  // click pipeline for selection, and blocking it was the previous regression.
   try {
     const result = await chrome.runtime.sendMessage({ type: "DIAL_PHONE", phone });
     if (result?.ok) {
