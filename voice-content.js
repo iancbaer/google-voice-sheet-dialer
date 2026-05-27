@@ -1,5 +1,64 @@
 "use strict";
 
+let micWarmStream = null;
+let lastMicWarmAttempt = 0;
+
+
+function injectGoogleVoiceMicOverride() {
+  if (document.documentElement.dataset.gvMicOverrideInjected === "1") return;
+  document.documentElement.dataset.gvMicOverrideInjected = "1";
+
+  const script = document.createElement("script");
+  script.textContent = `(() => {
+    if (window.__gvDialerMicOverrideInstalled) return;
+    window.__gvDialerMicOverrideInstalled = true;
+
+    const rejectBadInput = (label) => !/(monitor|airpods|bluez_output|hdmi|displayport|output)/i.test(label || "");
+    const preferGoodInput = (label) => /(forced|alsa source|hw:0,0|hda|analog|headset|headphone|mic|microphone)/i.test(label || "");
+
+    async function chooseInputDevice(mediaDevices) {
+      const devices = await mediaDevices.enumerateDevices();
+      const inputs = devices.filter((device) => device.kind === "audioinput");
+      return inputs.find((device) => rejectBadInput(device.label) && preferGoodInput(device.label))
+        || inputs.find((device) => rejectBadInput(device.label))
+        || inputs.find((device) => device.deviceId === "default")
+        || inputs[0]
+        || null;
+    }
+
+    const originalGetUserMedia = navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices);
+    if (!originalGetUserMedia) return;
+
+    navigator.mediaDevices.getUserMedia = async function patchedGetUserMedia(constraints) {
+      const next = constraints && typeof constraints === "object" ? { ...constraints } : constraints;
+      if (next && next.audio) {
+        try {
+          const selected = await chooseInputDevice(navigator.mediaDevices);
+          if (selected?.deviceId) {
+            const existing = typeof next.audio === "object" ? next.audio : {};
+            next.audio = {
+              ...existing,
+              deviceId: { exact: selected.deviceId },
+              echoCancellation: existing.echoCancellation ?? true,
+              noiseSuppression: existing.noiseSuppression ?? true,
+              autoGainControl: existing.autoGainControl ?? true
+            };
+            window.__gvDialerSelectedMic = selected.label || selected.deviceId;
+          }
+        } catch (error) {
+          window.__gvDialerMicOverrideError = String(error?.message || error);
+        }
+      }
+      return originalGetUserMedia(next);
+    };
+  })();`;
+  (document.documentElement || document.head).appendChild(script);
+  script.remove();
+}
+
+injectGoogleVoiceMicOverride();
+
+
 function phoneFromUrl() {
   const url = new URL(location.href);
   const explicit = url.searchParams.get("gv_dial");
@@ -69,6 +128,71 @@ function dispatchEnter(target) {
 async function commitDialInput(input) {
   dispatchEnter(input);
   await new Promise((resolve) => setTimeout(resolve, 350));
+}
+
+
+function micStreamAlive() {
+  return !!micWarmStream && micWarmStream.getAudioTracks().some((track) => track.readyState === "live");
+}
+
+async function ensureMicWarm(reason = "") {
+  if (micStreamAlive()) {
+    return true;
+  }
+
+  const now = Date.now();
+  if (now - lastMicWarmAttempt < 1500) {
+    return false;
+  }
+  lastMicWarmAttempt = now;
+
+  try {
+    micWarmStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      },
+      video: false
+    });
+    window.__gvDialerMicWarmStream = micWarmStream;
+    showStatus("Google Voice microphone is active.");
+    return true;
+  } catch (error) {
+    showStatus(`Google Voice microphone failed: ${error.name || error.message}`);
+    return false;
+  }
+}
+
+function findExplicitUnmuteButton() {
+  return [...document.querySelectorAll("button,[role='button']")]
+    .find((button) => {
+      if (!visible(button)) return false;
+      const text = buttonText(button).toLowerCase();
+      if (!text) return false;
+      return /\bunmute\b/.test(text)
+        || /turn on (the )?(microphone|mic)/.test(text)
+        || /(microphone|mic).*(off|muted)/.test(text);
+    });
+}
+
+async function keepVoiceMicReady() {
+  await ensureMicWarm("startup");
+  const unmuteButton = findExplicitUnmuteButton();
+  if (unmuteButton) {
+    unmuteButton.click();
+    await ensureMicWarm("unmute");
+  }
+}
+
+function installVoiceMicGuard() {
+  keepVoiceMicReady().catch(() => {});
+  setInterval(() => {
+    keepVoiceMicReady().catch(() => {});
+  }, 2000);
+  document.addEventListener("click", () => {
+    setTimeout(() => keepVoiceMicReady().catch(() => {}), 250);
+  }, true);
 }
 
 function installManualDialAssist() {
@@ -151,6 +275,7 @@ async function autoDialFromUrl() {
 
   input.focus();
   setNativeInputValue(input, phone);
+  await ensureMicWarm("before-auto-dial");
 
   for (let attempts = 0; attempts < 4; attempts += 1) {
     const result = await chrome.runtime.sendMessage({ type: "PLACE_TRUSTED_CALL", phone });
@@ -164,5 +289,6 @@ async function autoDialFromUrl() {
   showStatus("Could not place call in Google Voice.");
 }
 
+installVoiceMicGuard();
 installManualDialAssist();
 autoDialFromUrl().catch(() => {});

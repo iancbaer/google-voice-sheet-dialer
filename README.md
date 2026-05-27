@@ -10,6 +10,9 @@ What it does:
   through Chrome's trusted keyboard path and reads the copied phone number.
 - Google Voice: opens the call screen, fills the number, and uses Chrome's
   debugger input path to press the trusted call controls.
+- Google Voice mic guard: injects at `document_start` and forces Voice
+  WebRTC microphone requests away from AirPods/output monitor devices and onto
+  the real Linux mic.
 - Web pages: click phone-number text or links to dial through Google Voice.
 - Linux audio watchdog: keeps Chrome output routed to AirPods when connected,
   keeps the browser microphone on the forced ALSA mic source, and moves active
