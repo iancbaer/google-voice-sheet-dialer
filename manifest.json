@@ -1,14 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Google Voice Sheet Dialer",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "description": "Click phone numbers in Google Sheets and dial them through Google Voice.",
   "permissions": [
     "contextMenus",
     "debugger",
     "storage",
-    "tabs",
-    "clipboardRead"
+    "tabs"
   ],
   "host_permissions": [
     "http://*/*",
